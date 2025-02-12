@@ -125,6 +125,43 @@ app.post('/api/customers', async (req, res) => {
         res.status(500).json({ error: "Error creating customer" });
     }
 });
+app.put('/api/customers/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, email, phone } = req.body;
+
+        const updatedCustomer = await Customer.findByIdAndUpdate(
+            id,
+            { name, email, phone },
+            { new: true } // Return the updated document
+        );
+
+        if (!updatedCustomer) {
+            return res.status(404).json({ message: 'Customer not found' });
+        }
+
+        res.json(updatedCustomer);
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating customer', error });
+    }
+});
+
+// Backend API to delete a customer
+app.delete('/api/customers/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const deletedCustomer = await Customer.findByIdAndDelete(id);
+
+        if (!deletedCustomer) {
+            return res.status(404).json({ message: 'Customer not found' });
+        }
+
+        res.json({ message: 'Customer deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting customer', error });
+    }
+});
 
 // ✅ Fetch inventory items
 app.get('/api/inventory', async (req, res) => {
@@ -148,11 +185,49 @@ app.post('/api/inventory', async (req, res) => {
         res.status(500).json({ error: "Error adding inventory item" });
     }
 });
+// API to edit an inventory item
+app.put('/api/inventory/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, price } = req.body;
+
+        const updatedItem = await Inventory.findByIdAndUpdate(
+            id,
+            { name, price },
+            { new: true } // Return the updated document
+        );
+
+        if (!updatedItem) {
+            return res.status(404).json({ message: 'Item not found' });
+        }
+
+        res.json(updatedItem);
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating item', error });
+    }
+});
+
+// API to delete an inventory item
+app.delete('/api/inventory/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const deletedItem = await Inventory.findByIdAndDelete(id);
+
+        if (!deletedItem) {
+            return res.status(404).json({ message: 'Item not found' });
+        }
+
+        res.json({ message: 'Item deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting item', error });
+    }
+});
 
 // ✅ Fetch all invoices (with populated customer details)
 app.get('/api/invoices',  async (req, res) => {
     try {
-        const invoices = await Invoice.find().populate('customer');
+        const invoices = await Invoice.find();
         res.json(invoices);
     } catch (error) {
         console.error("Error fetching invoices:", error);
@@ -163,18 +238,77 @@ app.get('/api/invoices',  async (req, res) => {
 // ✅ Create a new invoice
 app.post('/api/invoices', async (req, res) => {
     try {
-        console.log(req.body);
-        const invoice = new Invoice(req.body);
-        await invoice.save();
-        res.status(201).json(invoice);
-        
-    } catch (error) {
-        console.error("Error creating invoice:", error);
-        res.status(500).json({ error: "Error creating invoice" });
-    }
-    
-});
+        // Fetch the last invoice to generate the next invoice ID
+        const lastInvoice = await Invoice.findOne().sort({ invoiceId: -1 }); // Get the last invoice
+        let nextInvoiceId = 'INV00001'; // Default invoice ID if no invoices exist
 
+        if (lastInvoice) {
+            const lastIdNumber = parseInt(lastInvoice.invoiceId.replace('INV', ''), 10);
+            nextInvoiceId = `INV${String(lastIdNumber + 1).padStart(5, '0')}`; // Increment and format
+        }
+
+        // Add the generated invoice ID to the request body
+        const invoiceData = {
+            ...req.body,
+            invoiceId: nextInvoiceId, // Use the generated invoice ID
+        };
+
+        // Save the invoice to the database
+        const newInvoice = await Invoice.create(invoiceData);
+
+        res.status(201).json(newInvoice);
+    } catch (error) {
+        res.status(500).json({ message: 'Error creating invoice', error });
+    }
+});
+app.put('/api/invoices/:id/paid', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const updatedInvoice = await Invoice.findByIdAndUpdate(
+            id,
+            { paymentStatus: 'Paid' },
+            { new: true } // Return the updated document
+        );
+
+        if (!updatedInvoice) {
+            return res.status(404).json({ message: 'Invoice not found' });
+        }
+
+        res.json(updatedInvoice);
+    } catch (error) {
+        res.status(500).json({ message: 'Error marking invoice as paid', error });
+    }
+});
+app.get('/api/get-next-invoice-id', async (req, res) => {
+    try {
+        const lastInvoice = await Invoice.findOne().sort({ invoiceId: -1 }).limit(1); // Find the most recent invoice
+        let nextInvoiceId = lastInvoice ? parseInt(lastInvoice.invoiceId.replace('INV', '')) + 1 : 1;
+        nextInvoiceId = `INV${String(nextInvoiceId).padStart(5, '0')}`; // Format as INV00001, INV00002, etc.
+        res.json({ nextInvoiceId });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get the next invoice ID' });
+    }
+});
+app.post('/api/save-invoice', async (req, res) => {
+    try {
+        const { invoiceId, customer, date, items, total, paymentStatus } = req.body;
+
+        const newInvoice = new Invoice({
+            invoiceId,
+            customer,
+            date,
+            items,
+            total,
+            paymentStatus
+        });
+
+        await newInvoice.save();
+        res.json({ message: 'Invoice saved successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to save invoice' });
+    }
+});
 // ✅ Fetch shop profile
 app.get('/api/shop-profile', async (req, res) => {
     try {
