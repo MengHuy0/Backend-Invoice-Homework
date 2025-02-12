@@ -261,6 +261,27 @@ app.post('/api/invoices', async (req, res) => {
         res.status(500).json({ message: 'Error creating invoice', error });
     }
 });
+app.put('/api/invoices/:invoiceId', async (req, res) => {
+    const { invoiceId } = req.params;
+    const { paymentStatus } = req.body;
+
+    try {
+        // Find the invoice by invoiceId and update the payment status
+        const invoice = await Invoice.findOneAndUpdate(
+            { invoiceId: invoiceId },
+            { paymentStatus: paymentStatus },
+            { new: true }  // Return the updated document
+        );
+
+        if (!invoice) {
+            return res.status(404).send('Invoice not found');
+        }
+
+        res.status(200).json(invoice);  // Send back the updated invoice
+    } catch (error) {
+        res.status(500).send('Error updating the invoice');
+    }
+});
 app.put('/api/invoices/:id/paid', async (req, res) => {
     try {
         const { id } = req.params;
